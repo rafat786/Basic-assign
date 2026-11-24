@@ -54,7 +54,7 @@ jobs:
       - name: Execute Unit Tests
         run: python -m pytest tests/ -v
 
-  # Stage 3: SonarQube Code Quality Analysis
+   # Stage 3: SonarQube Code Quality Analysis
   sonarqube:
     name: SonarQube Code Analysis
     needs: test
@@ -68,6 +68,10 @@ jobs:
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v8.3.0
+        with:
+          args: >
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
