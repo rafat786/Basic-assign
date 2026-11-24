@@ -1,17 +1,22 @@
+
 name: Python Application CI-CD Pipeline
 
 on:
   push:
     branches:
       - master
+
   pull_request:
     branches:
       - master
 
 jobs:
+
+  # Stage 1: Build Application
   build:
     name: Build Application
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -26,10 +31,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+  # Stage 2: Automated Unit Testing
   test:
     name: Run Unit Tests
     needs: build
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -47,11 +54,30 @@ jobs:
       - name: Execute Unit Tests
         run: python -m pytest tests/ -v
 
+  # Stage 3: SonarQube Code Quality Analysis
+  sonarqube:
+    name: SonarQube Code Analysis
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v8.3.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  # Stage 4: Docker Build and Push
   docker:
     name: Build and Push Docker Image
-    needs: test
+    needs: sonarqube
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -64,24 +90,32 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          docker build             -t ${{ secrets.DOCKERHUB_USERNAME }}/devops-demo:${{ github.sha }} .
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/devops-demo:${{ github.sha }} .
 
       - name: Push Docker Image
         run: |
-          docker push             ${{ secrets.DOCKERHUB_USERNAME }}/devops-demo:${{ github.sha }}
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-demo:${{ github.sha }}
 
+  # Stage 5: Pipeline Completion
   completion:
     name: Pipeline Completion
-    needs: docker
-    if: always() && needs.test.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped')
+    needs: [build, test, sonarqube, docker]
+    if: always() && needs.build.result == 'success' && needs.test.result == 'success' && needs.sonarqube.result == 'success' && (needs.docker.result == 'success' || needs.docker.result == 'skipped')
     runs-on: ubuntu-latest
+
     steps:
       - name: Verify Pipeline
         run: |
           echo "Build completed successfully"
           echo "Unit tests passed"
+          echo "SonarQube analysis completed successfully"
+
           if [ "${{ needs.docker.result }}" = "success" ]; then
             echo "Docker image pushed successfully"
           else
             echo "Docker publishing skipped for pull request"
           fi
+
+          echo "CI/CD pipeline completed successfully"
